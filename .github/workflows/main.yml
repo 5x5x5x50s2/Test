@@ -66,7 +66,7 @@ jobs:
         run: |
           Write-Host "Tailscale IP: $env:TAILSCALE_IP"
           
-          $testResult = Test-NetConnection -ComputerName $env:TAILSCALE_IP -Port 864000
+          $testResult = Test-NetConnection -ComputerName $env:TAILSCALE_IP -Port 65535
           if (-not $testResult.TcpTestSucceeded) {
               exit 1
           }
