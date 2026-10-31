@@ -1,0 +1,227 @@
+-- Global Safety Cleanup: Safely removes older open instances before running
+if game:GetService("CoreGui"):FindFirstChild("Project5x5x5x50s_Executor") then
+    game:GetService("CoreGui")["Project5x5x5x50s_Executor"]:Destroy()
+end
+
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local CoreGui = game:GetService("CoreGui")
+
+-- Top-level ScreenGui Container parented to CoreGui
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "Project5x5x5x50s_Executor"
+screenGui.ResetOnSpawn = false
+screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+screenGui.Parent = CoreGui
+
+-- DRAG FRAME MECHANICS
+local function makeDraggable(frame, handle)
+    local dragging = false
+    local dragInput, dragStart, startPos
+
+    handle.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = frame.Position
+            
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                end
+            end)
+        end
+    end)
+
+    handle.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+            dragInput = input
+        end
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if input == dragInput and dragging then
+            local delta = input.Position - dragStart
+            TweenService:Create(frame, TweenInfo.new(0.08, Enum.EasingStyle.Linear), {
+                Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+            }):Play()
+        end
+    end)
+end
+
+-- UI SHADOW EFFECT FUNCTION (Applies clean drop-shadow outlines)
+local function applyUIShadow(parentInstance, thickness, transparency)
+    local shadow = Instance.new("UIStroke")
+    shadow.Color = Color3.fromRGB(0, 0, 0)
+    shadow.Thickness = thickness or 2
+    shadow.Transparency = transparency or 0.5
+    shadow.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    shadow.Parent = parentInstance
+end
+
+-- ============================================================================
+-- MAIN INTERFACE FRAME (5x5x5x50s Project Executor Layout)
+-- ============================================================================
+local mainPanel = Instance.new("Frame")
+mainPanel.Name = "MainPanel"
+mainPanel.Size = UDim2.new(0, 600, 0, 320)
+mainPanel.Position = UDim2.new(0.5, -300, 0.5, -160)
+mainPanel.BackgroundColor3 = Color3.fromRGB(23, 114, 169) -- Deep blue frame color match
+mainPanel.BackgroundTransparency = 0.5 -- Applied frame transparency as requested
+mainPanel.BorderSizePixel = 0
+mainPanel.Parent = screenGui
+
+local mainCorner = Instance.new("UICorner")
+mainCorner.CornerRadius = UDim.new(0, 8)
+mainCorner.Parent = mainPanel
+
+-- Apply main frame shadow
+applyUIShadow(mainPanel, 3, 0.55)
+
+-- Top Header Window Handle (Draggable Area)
+local headerBar = Instance.new("Frame")
+headerBar.Name = "HeaderBar"
+headerBar.Size = UDim2.new(1, 0, 0, 50)
+headerBar.BackgroundTransparency = 1
+headerBar.Parent = mainPanel
+
+-- Cat Profile Picture / Custom Icon
+local catIcon = Instance.new("ImageLabel")
+catIcon.Name = "CatIcon"
+catIcon.Size = UDim2.new(0, 40, 0, 40)
+catIcon.Position = UDim2.new(0, 8, 0, 5)
+catIcon.BackgroundTransparency = 1
+catIcon.Image = "rbxassetid://94867359546984" -- Cat Profile Decal ID
+catIcon.Parent = headerBar
+
+local catCorner = Instance.new("UICorner")
+catCorner.CornerRadius = UDim.new(1, 0) -- Fully circular rounding
+catCorner.Parent = catIcon
+
+-- Title Text Label
+local titleLabel = Instance.new("TextLabel")
+titleLabel.Size = UDim2.new(1, -60, 1, 0)
+titleLabel.Position = UDim2.new(0, 56, 0, 0)
+titleLabel.BackgroundTransparency = 1
+titleLabel.Text = "5x5x5x50s Project Executor"
+titleLabel.Font = Enum.Font.SourceSansItalic
+titleLabel.TextSize = 26
+titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+titleLabel.Parent = headerBar
+
+makeDraggable(mainPanel, headerBar)
+
+-- ============================================================================
+-- SCRIPT BOX WINDOW AREA (With multi-line text wrapping support)
+-- ============================================================================
+local textFrame = Instance.new("ScrollingFrame")
+textFrame.Size = UDim2.new(0, 430, 0, 250)
+textFrame.Position = UDim2.new(0, 10, 0, 55)
+textFrame.BackgroundColor3 = Color3.fromRGB(189, 245, 255) -- Bright cyan text window background match
+textFrame.BorderSizePixel = 0
+textFrame.CanvasSize = UDim2.new(0, 0, 5, 0) -- Multi-line vertical only scroll
+textFrame.Parent = mainPanel
+
+local textFrameCorner = Instance.new("UICorner")
+textFrameCorner.CornerRadius = UDim.new(0, 4)
+textFrameCorner.Parent = textFrame
+
+-- Apply shadow to code editor container
+applyUIShadow(textFrame, 2, 0.6)
+
+local codeTextBox = Instance.new("TextBox")
+codeTextBox.Size = UDim2.new(1, -16, 1, -12)
+codeTextBox.Position = UDim2.new(0, 8, 0, 6)
+codeTextBox.BackgroundTransparency = 1
+codeTextBox.Text = 'print("5x5x5x50s wants to say hi to you")'
+codeTextBox.ClearTextOnFocus = false
+codeTextBox.MultiLine = true
+codeTextBox.TextWrapped = true -- Text wrapping enabled
+codeTextBox.Font = Enum.Font.Code
+codeTextBox.TextSize = 14
+codeTextBox.TextColor3 = Color3.fromRGB(0, 0, 0)
+codeTextBox.TextXAlignment = Enum.TextXAlignment.Left
+codeTextBox.TextYAlignment = Enum.TextYAlignment.Top
+codeTextBox.Parent = textFrame
+
+-- ============================================================================
+-- SIDE UTILITY CONTROL COLUMN (Right Side)
+-- ============================================================================
+local rightPanel = Instance.new("Frame")
+rightPanel.Size = UDim2.new(0, 140, 0, 250)
+rightPanel.Position = UDim2.new(0, 450, 0, 55)
+rightPanel.BackgroundTransparency = 1
+rightPanel.Parent = mainPanel
+
+-- Factory layout constructor for cyan side actions buttons with custom shadows
+local function createCyanButton(text, pos, parent)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(1, 0, 0, 36)
+    btn.Position = pos
+    btn.BackgroundColor3 = Color3.fromRGB(0, 222, 255) -- Vibrant light-cyan match
+    btn.BorderSizePixel = 0
+    btn.Text = text
+    btn.Font = Enum.Font.SourceSans
+    btn.TextSize = 20
+    btn.TextColor3 = Color3.fromRGB(0, 0, 0)
+    btn.Parent = parent
+
+    local btnCorner = Instance.new("UICorner")
+    btnCorner.CornerRadius = UDim.new(0, 6)
+    btnCorner.Parent = btn
+    
+    -- Apply custom button shadow
+    applyUIShadow(btn, 2, 0.5)
+    
+    return btn
+end
+
+local executeBtn = createCyanButton("Execute", UDim2.new(0, 0, 0, 0), rightPanel)
+local clearBtn = createCyanButton("Clear", UDim2.new(0, 0, 0, 48), rightPanel)
+
+-- "Join Team" Community Asset Graphic Decal
+local teamImage = Instance.new("ImageLabel")
+teamImage.Name = "TeamGraphic"
+teamImage.Size = UDim2.new(0, 80, 0, 80)
+teamImage.Position = UDim2.new(0.5, -40, 0, 96)
+teamImage.BackgroundTransparency = 1
+teamImage.Image = "rbxassetid://98112302848135" -- Decal ID near Copy Discord
+teamImage.Parent = rightPanel
+
+local copyDiscordBtn = createCyanButton("Copy Discord", UDim2.new(0, 0, 0, 188), rightPanel)
+
+-- ============================================================================
+-- FUNCTIONAL CONNECTIONS
+-- ============================================================================
+
+-- Text input clear feature
+clearBtn.MouseButton1Click:Connect(function()
+    codeTextBox.Text = ""
+end)
+
+-- Script string execution handling
+executeBtn.MouseButton1Click:Connect(function()
+    local targetFunc = loadstring or syn and syn.loadstring
+    if targetFunc then
+        local compiled, err = targetFunc(codeTextBox.Text)
+        if compiled then
+            task.spawn(compiled)
+        else
+            warn("Compilation Error: " .. tostring(err))
+        end
+    else
+        warn("Execution environment runtime error: 'loadstring' unavailable.")
+    end
+end)
+
+-- Clipboard URL copier utility
+copyDiscordBtn.MouseButton1Click:Connect(function()
+    local url = "https://discord.gg/WbDBSMA6V"
+    local setClip = setclipboard or toclipboard or (syn and syn.set_clipboard)
+    if setClip then
+        setClip(url)
+    else
+        print("Fallback copy target string: ", url)
+    end
+end)
